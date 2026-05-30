@@ -27,7 +27,7 @@ static double most_recent_price = 0;
 
 // Set up date and time config
 static const char* ntp_server = "pool.ntp.org";
-static const long  gmt_offset_sec = 14400;
+static const long  gmt_offset_sec = -18000;
 static const int   daylight_offset_sec = 3600;
 static int setup_day = 0;
 static int setup_month = 0;
@@ -77,7 +77,7 @@ String extractValue(String html) {
   int start = 0;
   while(detected < 12)
   {
-    captured = html.indexOf("City", start);
+    captured = html.indexOf("Lowell", start);
     detected++;
     start = captured + 6;
   }
@@ -96,8 +96,8 @@ String extractValue(String html) {
 }
 
 double findPricePerFlush() {
-  // keep this static for now until I figure out how to parse the html from this website_url_where_I_pulled_price_from
-  String server_url = "website_url_where_I_pulled_price_from";
+  // keep this static for now until I figure out how to parse the html from this url
+  String server_url = "https://domain.com";
   HTTPClient http;
   String payload;
   String extracted_water_value = "";
@@ -117,6 +117,8 @@ double findPricePerFlush() {
       Serial.println(extracted_water_value);
       price_per_5000_gallons = extracted_water_value.toDouble();
       price_per_flush = price_per_5000_gallons / 5000;
+      http.end();
+      disconnectFromWIFI();
 
       return price_per_flush;
     }
@@ -131,7 +133,7 @@ double findPricePerFlush() {
   http.end();
   disconnectFromWIFI();
 
-  // parse payload here and get new price
+  // static price if GET request fails
   price_per_5000_gallons = 45.88;
   price_per_flush = price_per_5000_gallons / 5000;
 
@@ -143,11 +145,20 @@ struct tm getCurrentTime() {
   connectToWIFI();
   configTime(gmt_offset_sec, daylight_offset_sec, ntp_server);
   struct tm timeinfo;
-  if(!getLocalTime(&timeinfo)){
-    Serial.println("Failed to obtain time");
-    // return;
+  int attempts = 0;
+  int max_attempts = 3;
+  while(attempts < max_attempts)
+  {
+    if(getLocalTime(&timeinfo)) {
+      disconnectFromWIFI();
+      return timeinfo;
+    }
+    // Serail.println("Failed to get time, trying again");
+    delay(500);
+    attempts++;
   }
   disconnectFromWIFI();
+  timeinfo = {};
   return timeinfo;
 }
 
@@ -185,10 +196,7 @@ bool checkIfDayPass(struct tm &timeinfo) {
   int current_month = timeinfo.tm_mon;
   int current_year = timeinfo.tm_year;
 
-  if(time_counter > 40) { // ~every minute or so it will check
-    time_counter = 0;
-
-    if(current_year > setup_year) {
+  if(current_year > setup_year) {
     setup_year = current_year;
     setup_month = current_month;
     setup_day = current_day;
@@ -203,7 +211,6 @@ bool checkIfDayPass(struct tm &timeinfo) {
   if(current_day > setup_day) {
     setup_day = current_day;
     return true;
-  }
   }
 
   return false;
@@ -266,10 +273,16 @@ void  setup() {
  
 void  loop() {
     time_counter++;
-    struct tm current_time = getCurrentTime();
-    if(checkIfDayPass(current_time)) {
-      num_of_daily_flushes = 0;
-      most_recent_price = findPricePerFlush();
+
+    if(time_counter > 20) { // ~every minute or so it will check
+      time_counter = 0;
+      struct tm current_time = getCurrentTime();
+      if(current_time.tm_year > 100) {
+        if(checkIfDayPass(current_time)) {
+          num_of_daily_flushes = 0;
+          most_recent_price = findPricePerFlush();
+        }
+      }
     }
 
     lcd.setCursor(2, 0);
