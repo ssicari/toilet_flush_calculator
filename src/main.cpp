@@ -11,6 +11,14 @@
 #ifndef WIFI_PASS
 #define WIFI_PASS "WiFi-PASS"    // WiFi Password (default placeholder)
 #endif
+
+#ifndef WEB_URL
+#define WEB_URL "domain.com"    // Web URL (default placeholder)
+#endif
+
+#ifndef UUID
+#define UUID "12345"    // UUID(default placeholder)
+#endif
  
  // Define Pins
 const int water_sensor_pin = A0;
@@ -38,7 +46,7 @@ static int setup_year = 0;
 static int time_counter = 0;
 
 // Configure ntfy topic
-static const String ntfy_topic = "toilet_flush_calculator_uuid";
+static const String ntfy_topic = "toilet_flush_calculator_" + String(UUID);
 
 // Persitent file path
 static const String file_path = "/persistent_data";
@@ -99,8 +107,8 @@ String extractValue(String html) {
 }
 
 double findPricePerFlush() {
-  // keep this static for now until I figure out how to parse the html from this url
-  String server_url = "https:domain.com";
+  // keep this static for now until I figure out how to parse the html from this WEB_URL
+  String server_url = WEB_URL;
   HTTPClient http;
   String payload;
   String extracted_water_value = "";
