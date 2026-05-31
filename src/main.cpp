@@ -22,6 +22,9 @@ static const double water_per_flush = 1.3; // My toilet claims 1.0 - 1.6 gpf for
 static double total_price = 0.00;
 static int num_of_daily_flushes = 0;
 
+// Reset Flag for ISR, some needed functions are not fast enough for the actual service routine so need to move it
+// static bool reset_flag = false;
+
 // Most recent price per flush
 static double most_recent_price = 0;
 
@@ -97,7 +100,7 @@ String extractValue(String html) {
 
 double findPricePerFlush() {
   // keep this static for now until I figure out how to parse the html from this url
-  String server_url = "https://domain.com";
+  String server_url = "https:domain.com";
   HTTPClient http;
   String payload;
   String extracted_water_value = "";
@@ -162,7 +165,7 @@ struct tm getCurrentTime() {
   return timeinfo;
 }
 
-void sendNtfyNotification() {
+void sendNtfyNotification(String message) {
   connectToWIFI();
   if(WiFi.status() != WL_CONNECTED) {
     Serial.println("Notification Did Not Send Due To Not Being Connected To WIFI");
@@ -175,9 +178,10 @@ void sendNtfyNotification() {
   http.addHeader("Title", "Toilet Flush Calculator");
   http.addHeader("Content-Type", "text/plain");
 
-  String message = "Toilet Has Been Flushed";
+  // String message = "Toilet Has Been Flushed";
   // Serial.println("Sending: " + message);
 
+  message = message + "\nTotal Price: " + String(total_price, 5) + "\nNumber Of Daily Flushes: " + String(num_of_daily_flushes);
   int httpResponseCode = http.POST(message);
 
   // if (httpResponseCode > 0) {
@@ -250,12 +254,20 @@ void writeFileContents(double total_price, double num_of_daily_flushes) {
   file.close();
 }
 
+// void buttonISR() {
+//   reset_flag = true;
+// }
+
 void  setup() {
   Serial.begin(115200);
    // Initialize the LCD connected 
   lcd.begin();
   // Turn on the backlight on LCD. 
   lcd.backlight();
+  // Set up button ISR 
+  // pinMode(9, INPUT_PULLUP);
+  // attachInterrupt(digitalPinToInterrupt(9), buttonISR, FALLING);
+
   struct tm current_time = getCurrentTime();     
   setup_day = current_time.tm_mday;
   setup_month = current_time.tm_mon;
@@ -290,20 +302,26 @@ void  loop() {
     lcd.setCursor(2, 1);
     lcd.print("$");
 
-
     lcd.setCursor(3, 1);
     int water_sensor_value = analogRead(water_sensor_pin);
 
     Serial.print("Water Level: ");
     Serial.println(water_sensor_value);
+    // if(reset_flag) {
+    //   reset_flag = false;
+    //   sendNtfyNotification("Toilet Calculator Has Been Reset");
+    //   total_price = 0.00;
+    //   num_of_daily_flushes = 0;
+    //   writeFileContents(total_price, num_of_daily_flushes);
+    // }
     // if numbers are very different and sometimes residual water messes with it so needs tuning
     // double check timing to make sure water rises back above this in time to not double count
     if(water_sensor_value < 1700) {
       // Serial.println("Flush happend");
-      sendNtfyNotification();
       total_price += most_recent_price;
       // Serial.println(total_price);
       num_of_daily_flushes += 1;
+      sendNtfyNotification("Toilet Has Been Flushed");
       lcd.print(total_price, 5);
       writeFileContents(total_price, num_of_daily_flushes);
       delay(18500);
